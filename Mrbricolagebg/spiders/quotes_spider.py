@@ -69,7 +69,7 @@ class MrbricolageSpider(scrapy.Spider):
         
         article_text = extract_with_css('div.col-md-12.bricolage-code::text')
         article_id= article_text.replace('Код Bricolage: ', '')
-        product.update({'articleID': article_id})
+        product.update({'article_id': article_id})
         
         
         EAN =  response.css('div[id="home"] span::text').re('[^\t\n\xa0]+')[0]
