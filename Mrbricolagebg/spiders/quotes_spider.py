@@ -15,9 +15,7 @@ class MrbricolageSpider(scrapy.Spider):
         yield from response.follow_all(all_pages, self.parse)
     
     def parse_product(self, response):
-        def extract_with_css(query):
-            return response.css(query).get(default='').strip()
-       
+      
         def table_atributes_extract(table):     
             if "Марка" in table:
                 index = table.index('Марка')
@@ -57,7 +55,7 @@ class MrbricolageSpider(scrapy.Spider):
         
         product = {}
         
-        product.update({'title': extract_with_css('h1.js-product-name::text')})
+        product.update({'title': response.css('h1.js-product-name::text').get().strip()})
         
         raw_price = response.css('p.price.js-product-price::text').re('[^\sлв.]+')[0]
         if raw_price:
@@ -69,7 +67,7 @@ class MrbricolageSpider(scrapy.Spider):
         if availability:
             product.update({'availability': availability})
         
-        article_text = extract_with_css('div.col-md-12.bricolage-code::text')
+        article_text = response.css('div.col-md-12.bricolage-code::text').get().strip()
         if article_text:
             article_id= article_text.replace('Код Bricolage: ', '')
             product.update({'article_id': article_id})
