@@ -45,40 +45,49 @@ class MrbricolageSpider(scrapy.Spider):
                 product.update({'origin': origin})
             if "Гаранция" in table:    
                 index = table.index('Гаранция')
-                warranty = table[index+1]
+                warranty = "{} {}".format(table[index+1],table[index+2])
                 table.pop(index)
                 table.pop(index)
                 table.pop(index)
-                product.update({'warranty': "{} години".format(warranty)})
+                product.update({'warranty': warranty})
             if len(table) > 0:
-                product.update({"other atributes:": table})
+                other_attributes = " ".join(table)
+                product.update({"other attributes:": other_attributes})
             
         
         product = {}
         
         product.update({'title': extract_with_css('h1.js-product-name::text')})
         
-        raw_price = response.css('p.price.js-product-price::text').re('[^\t\n\xa0]+')[0]
-        price =  ''.join(raw_price)
-        price = price.replace(',','.')
-        product.update({'price': price})
+        raw_price = response.css('p.price.js-product-price::text').re('[^\sлв.]+')[0]
+        if raw_price:
+            price = raw_price.replace(',','.')
+            product.update({'price': price})
         
-        availability = extract_with_css('div.col-md-12.bricolage-availability::text')
-        availability = availability.replace('\xa0','')
-        product.update({'availability': availability})
+        
+        availability = response.css('div.col-md-12.bricolage-availability::text').get().strip()
+        if availability:
+            product.update({'availability': availability})
         
         article_text = extract_with_css('div.col-md-12.bricolage-code::text')
-        article_id= article_text.replace('Код Bricolage: ', '')
-        product.update({'article_id': article_id})
+        if article_text:
+            article_id= article_text.replace('Код Bricolage: ', '')
+            product.update({'article_id': article_id})
         
+        ean = response.css('div[id="home"] span::text').re('[^\s]+')[0]
+        if ean:
+            product.update({'ean': ean})
         
-        EAN =  response.css('div[id="home"] span::text').re('[^\t\n\xa0]+')[0]
-        product.update({'ean': EAN})
         product.update({'url': response.url})
-        product.update({'images': response.css('div.owl-thumb-item img::attr(src)').getall()})
         
-        table = response.xpath('//*[@class="table"]//tbody//td//text()').re('[^\t\n\xa0]+')
-        table_atributes_extract(table)
+        images = response.css('div.owl-thumb-item img::attr(src)').getall()
+        if images:
+            product.update({'images': images})
+        
+        table = response.xpath('//*[@class="table"]//tbody//td//text()').re('[^\s]+')
+        if table:
+            table_atributes_extract(table)
+        
         yield product
         
     
