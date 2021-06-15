@@ -17,32 +17,27 @@ class MrbricolageSpider(scrapy.Spider):
             if "Марка" in table:
                 index = table.index('Марка')
                 table.pop(index)
-                brand = table.pop(index)
-                product.update({'brand': brand})
+                product.update({'brand': table.pop(index)})
 
             if "Модел" in table:
                 index = table.index('Модел')
                 table.pop(index)
-                model = table.pop(index)
-                product.update({'model': model})
+                product.update({'model': table.pop(index)})
 
             if "Наименование" in table:
                 index = table.index('Наименование')
                 table.pop(index)
-                name = table.pop(index)
-                product.update({'name': name})
+                product.update({'name': table.pop(index)})
 
             if "Произход" in table:
                 index = table.index('Произход')
                 table.pop(index)
-                origin = table.pop(index)
-                product.update({'origin': origin})
+                product.update({'origin': table.pop(index)})
 
             if "Гаранция" in table:
                 index = table.index('Гаранция')
                 table.pop(index)
-                warranty = "{} {}".format(table.pop(index), table.pop(index))
-                product.update({'warranty': warranty})
+                product.update({'warranty': '{} {}'.format(table.pop(index), table.pop(index))})
 
             if len(table) > 0:
                 other_attributes = " ".join(table)
