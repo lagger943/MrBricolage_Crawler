@@ -13,39 +13,39 @@ class MrbricolageSpider(scrapy.Spider):
         yield from response.follow_all(all_pages, self.parse)
 
     def parse_product(self, response):
-        def table_attributes_extract(product_table):
-            if "Марка" in product_table:
-                index = product_table.index('Марка')
-                product_table.pop(index)
-                brand = product_table.pop(index)
+        def table_attributes_extract(table):
+            if "Марка" in table:
+                index = table.index('Марка')
+                table.pop(index)
+                brand = table.pop(index)
                 product.update({'brand': brand})
 
-            if "Модел" in product_table:
-                index = product_table.index('Модел')
-                product_table.pop(index)
-                model = product_table.pop(index)
+            if "Модел" in table:
+                index = table.index('Модел')
+                table.pop(index)
+                model = table.pop(index)
                 product.update({'model': model})
 
-            if "Наименование" in product_table:
-                index = product_table.index('Наименование')
-                product_table.pop(index)
-                name = product_table.pop(index)
+            if "Наименование" in table:
+                index = table.index('Наименование')
+                table.pop(index)
+                name = table.pop(index)
                 product.update({'name': name})
 
-            if "Произход" in product_table:
-                index = product_table.index('Произход')
-                product_table.pop(index)
-                origin = product_table.pop(index)
+            if "Произход" in table:
+                index = table.index('Произход')
+                table.pop(index)
+                origin = table.pop(index)
                 product.update({'origin': origin})
 
-            if "Гаранция" in product_table:
-                index = product_table.index('Гаранция')
-                product_table.pop(index)
-                warranty = "{} {}".format(product_table.pop(index), product_table.pop(index))
+            if "Гаранция" in table:
+                index = table.index('Гаранция')
+                table.pop(index)
+                warranty = "{} {}".format(table.pop(index), table.pop(index))
                 product.update({'warranty': warranty})
 
-            if len(product_table) > 0:
-                other_attributes = " ".join(product_table)
+            if len(table) > 0:
+                other_attributes = " ".join(table)
                 product.update({"other attributes:": other_attributes})
 
         product = {}
@@ -76,8 +76,8 @@ class MrbricolageSpider(scrapy.Spider):
         if images:
             product.update({'images': images})
 
-        table = response.xpath('//*[@class="table"]//tbody//td//text()').re('[^\s]+')
-        if table:
-            table_attributes_extract(table)
+        product_table = response.xpath('//*[@class="table"]//tbody//td//text()').re('[^\s]+')
+        if product_table:
+            table_attributes_extract(product_table)
 
         yield product
