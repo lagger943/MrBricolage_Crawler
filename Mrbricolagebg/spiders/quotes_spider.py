@@ -13,7 +13,10 @@ class MrbricolageSpider(scrapy.Spider):
         yield from response.follow_all(all_pages, self.parse)
 
     def parse_product(self, response):
-        def table_attributes_extract(table):
+        def get_strip(path):
+            return response.css(path).get().strip()
+
+        def spec_table_attributes_extract(table):
             if "Марка" in table:
                 index = table.index('Марка')
                 table.pop(index)
@@ -45,18 +48,18 @@ class MrbricolageSpider(scrapy.Spider):
 
         product = {}
 
-        product.update({'title': response.css('h1.js-product-name::text').get().strip()})
+        product.update({'title': get_strip('h1.js-product-name::text')})
 
-        raw_price = response.css('p.price.js-product-price::text').re('[^\sлв.]+')[0]
+        raw_price = get_strip('p.price.js-product-price::text')
         if raw_price:
             price = raw_price.replace(',', '.')
             product.update({'price': price})
 
-        availability = response.css('div.col-md-12.bricolage-availability::text').get().strip()
+        availability = get_strip('div.col-md-12.bricolage-availability::text')
         if availability:
             product.update({'availability': availability})
 
-        article_text = response.css('div.col-md-12.bricolage-code::text').get().strip()
+        article_text = get_strip('div.col-md-12.bricolage-code::text')
         if article_text:
             article_id = article_text.replace('Код Bricolage: ', '')
             product.update({'article_id': article_id})
@@ -71,8 +74,11 @@ class MrbricolageSpider(scrapy.Spider):
         if images:
             product.update({'images': images})
 
-        product_table = response.xpath('//*[@class="table"]//tbody//td//text()').re('[^\s]+')
-        if product_table:
-            table_attributes_extract(product_table)
+        specs_table = []
+
+        for row in response.css('table.table tr'):
+            specs_table.append({'key': row.css('td:nth-child(1)::text').get().strip(),
+                                'value': row.css( 'td:nth-child(2)::text').get().strip()})
+        product.update({"specs": specs_table});
 
         yield product
