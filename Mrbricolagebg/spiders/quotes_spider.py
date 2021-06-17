@@ -79,6 +79,6 @@ class MrbricolageSpider(scrapy.Spider):
         for row in response.css('table.table tr'):
             specs_table.append({'key': row.css('td:nth-child(1)::text').get().strip(),
                                 'value': row.css( 'td:nth-child(2)::text').get().strip()})
-        product.update({"specs": specs_table});
+        product.update({"specs_table": specs_table})
 
         yield product
