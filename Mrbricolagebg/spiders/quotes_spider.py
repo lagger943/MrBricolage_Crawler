@@ -16,35 +16,15 @@ class MrbricolageSpider(scrapy.Spider):
         def get_strip(path):
             return response.css(path).get().strip()
 
-        def spec_table_attributes_extract(table):
-            if "Марка" in table:
-                index = table.index('Марка')
-                table.pop(index)
-                product.update({'brand': table.pop(index)})
+        def spec_table_attributes_extract():
 
-            if "Модел" in table:
-                index = table.index('Модел')
-                table.pop(index)
-                product.update({'model': table.pop(index)})
+            [product.update({'brand': key['value']}) for key in specs_table if "Марка" in key['key']]
 
-            if "Наименование" in table:
-                index = table.index('Наименование')
-                table.pop(index)
-                product.update({'name': table.pop(index)})
+            [product.update({'model': key['value']}) for key in specs_table if "Модел" in key['key']]
 
-            if "Произход" in table:
-                index = table.index('Произход')
-                table.pop(index)
-                product.update({'origin': table.pop(index)})
+            [product.update({'origin': key['value']}) for key in specs_table if "Произход" in key['key']]
 
-            if "Гаранция" in table:
-                index = table.index('Гаранция')
-                table.pop(index)
-                product.update({'warranty': '{} {}'.format(table.pop(index), table.pop(index))})
-
-            if len(table) > 0:
-                other_attributes = " ".join(table)
-                product.update({"other attributes:": other_attributes})
+            [product.update({'warranty': key['value']}) for key in specs_table if "Гаранция" in key['key']]
 
         product = {}
 
@@ -74,11 +54,12 @@ class MrbricolageSpider(scrapy.Spider):
         if images:
             product.update({'images': images})
 
-        specs_table = []
+        specs_table = [{'key': row.css('td:nth-child(1)::text').get().strip(),
+                        'value': row.css('td:nth-child(2)::text').get().strip()} for row
+                       in response.css('table.table tr')]
 
-        for row in response.css('table.table tr'):
-            specs_table.append({'key': row.css('td:nth-child(1)::text').get().strip(),
-                                'value': row.css( 'td:nth-child(2)::text').get().strip()})
+        spec_table_attributes_extract()
+
         product.update({"specs_table": specs_table})
 
         yield product
