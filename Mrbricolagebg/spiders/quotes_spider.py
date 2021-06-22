@@ -19,8 +19,9 @@ class MrbricolageSpider(scrapy.Spider):
             return response.css(path).get().strip()
 
         def parse_availability_info():
-            pass
-        def store_availability_request(response):
+            return product.update(["json:", json.loads(response.text)])
+
+        def store_availability_request():
             headers = {
                 "Connection": "keep-alive",
                 "sec-ch-ua": "\" Not;A Brand\";v=\"99\", \"Google Chrome\";v=\"91\", \"Chromium\";v=\"91\"",
@@ -40,7 +41,7 @@ class MrbricolageSpider(scrapy.Spider):
             cookies = {
                 "JSESSIONID": response.headers.getlist('Set-Cookie')[0].decode("utf-8").split(";")[0].split("=")[1],
                 "bricolage-customerLocation": "\"|42.6641056,23.3233149\"",
-                "ROUTEID": "B8834011C5DFE8855B11150F71AF01DF",
+                "ROUTEID": ".node1",
                 "__utma": "149670890.1557527530.1624294132.1624294132.1624294132.1",
                 "__utmc": "149670890",
                 "__utmz": "149670890.1624294132.1.1.utmcsr=(direct)|utmccn=(direct)|utmcmd=(none)",
@@ -55,12 +56,12 @@ class MrbricolageSpider(scrapy.Spider):
                 "_ym_visorc": "w",
                 "cb-enabled": "enabled",
                 "_ym_isad": "2",
-                "__utmb": "149670890.3.10.1624294132",
-                "_ga_2E6XGN78KC": "GS1.1.1624294131.1.1.1624294899.0"
             }
+            token = response.css('[name="CSRFToken"]::attr(value)').get()
 
-            body = 'locationQuery=&cartPage=false&entryNumber=0&latitude=42.6641056&longitude=23.3233149&CSRFToken=5bed69e0-9f36-4c5b-a5c3-88bc8f1da949'
-            Request(
+            body = f'locationQuery=&cartPage=false&entryNumber=0&latitude=42.6641056&longitude=23.3233149&CSRFToken={token}'
+
+            yield Request(
                 url=url,
                 method='POST',
                 dont_filter=True,
@@ -97,6 +98,7 @@ class MrbricolageSpider(scrapy.Spider):
         if article_text:
             article_id = article_text.replace('Код Bricolage: ', '')
             product.update({'article_id': article_id})
+
             url = f"https://mr-bricolage.bg/store-pickup/{article_id}/pointOfServices"
 
         ean = response.css('div[id="home"] span::text').re('[^\s]+')[0]
@@ -114,11 +116,9 @@ class MrbricolageSpider(scrapy.Spider):
                        in response.css('table.table tr')]
 
         spec_table_attributes_extract()
-        store_availability_request(response)
+
+        store_availability_request()
+
         product.update({"specs_table": specs_table})
 
         yield product
-
-
-
-
