@@ -19,9 +19,6 @@ class MrbricolageSpider(scrapy.Spider):
     def get_and_strip(self, path, response):
         return response.css(path).get().strip()
 
-    def parse_availability_info(self, response):
-        self.product.update(["json:", json.loads(response.text)])
-
     def store_availability_request(self, response, request_url):
         headers = {
             "Connection": "keep-alive",
@@ -68,12 +65,14 @@ class MrbricolageSpider(scrapy.Spider):
             dont_filter=True,
             cookies=cookies,
             headers=headers,
-            callback=self.parse_availability_info(response),
+            callback=self.parse_availability_info,
             body=body
         )
 
-    def parse_product(self, response):
+    def parse_availability_info(self, response):
+        self.log(f"{json.loads(response.text)}")
 
+    def parse_product(self, response):
         def spec_table_attributes_extract():
 
             [self.product.update({'brand': key['value']}) for key in specs_table if "Марка" in key['key']]
