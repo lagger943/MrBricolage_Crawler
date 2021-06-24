@@ -19,59 +19,6 @@ class MrbricolageSpider(scrapy.Spider):
     def get_and_strip(self, path, response):
         return response.css(path).get().strip()
 
-    def store_availability_request(self, response, request_url):
-        headers = {
-            "Connection": "keep-alive",
-            "sec-ch-ua": "\" Not;A Brand\";v=\"99\", \"Google Chrome\";v=\"91\", \"Chromium\";v=\"91\"",
-            "Accept": "*/*",
-            "X-Requested-With": "XMLHttpRequest",
-            "sec-ch-ua-mobile": "?0",
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.106 Safari/537.36",
-            "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
-            "Origin": "https://mr-bricolage.bg",
-            "Sec-Fetch-Site": "same-origin",
-            "Sec-Fetch-Mode": "cors",
-            "Sec-Fetch-Dest": "empty",
-            "Referer": response.url,
-            "Accept-Language": "bg-BG,bg;q=0.9"
-        }
-
-        cookies = {
-            "JSESSIONID": response.headers.getlist('Set-Cookie')[0].decode("utf-8").split(";")[0].split("=")[1],
-            "bricolage-customerLocation": "\"|42.6641056,23.3233149\"",
-            "ROUTEID": ".node1",
-            "__utma": "149670890.1557527530.1624294132.1624294132.1624294132.1",
-            "__utmc": "149670890",
-            "__utmz": "149670890.1624294132.1.1.utmcsr=(direct)|utmccn=(direct)|utmcmd=(none)",
-            "__utmt": "1",
-            "__utmb": "149670890.1.10.1624294132",
-            "_fbp": "fb.1.1624294131731.59759582",
-            "_ym_uid": "1624294132506831981",
-            "_ym_d": "1624294132",
-            "_ga_2E6XGN78KC": "GS1.1.1624294131.1.0.1624294131.0",
-            "_ga": "GA1.1.493738342.1624294132",
-            "_gcl_au": "1.1.214298219.1624294132",
-            "_ym_visorc": "w",
-            "cb-enabled": "enabled",
-            "_ym_isad": "2",
-        }
-        token = response.css('[name="CSRFToken"]::attr(value)').get()
-
-        body = f'locationQuery=&cartPage=false&entryNumber=0&latitude=42.6641056&longitude=23.3233149&CSRFToken={token}'
-
-        yield Request(
-            url=request_url,
-            method='POST',
-            dont_filter=True,
-            cookies=cookies,
-            headers=headers,
-            callback=self.parse_availability_info,
-            body=body
-        )
-
-    def parse_availability_info(self, response):
-        self.log(f"{json.loads(response.text)}")
-
     def parse_product(self, response):
         def spec_table_attributes_extract():
 
@@ -118,8 +65,105 @@ class MrbricolageSpider(scrapy.Spider):
 
         spec_table_attributes_extract()
 
-        self.store_availability_request(response, request_url)
-
         self.product.update({"specs_table": specs_table})
 
+        headers = {
+            "Connection": "keep-alive",
+            "sec-ch-ua": "\" Not;A Brand\";v=\"99\", \"Google Chrome\";v=\"91\", \"Chromium\";v=\"91\"",
+            "Accept": "*/*",
+            "X-Requested-With": "XMLHttpRequest",
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.114 Safari/537.36",
+            "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
+            "Origin": "https://mr-bricolage.bg",
+            "Sec-Fetch-Dest": "empty",
+            "Referer": response.url,
+            "Accept-Language": "bg-BG,bg;q=0.9,en;q=0.8"
+        }
+
+        cookies = {
+            "bricolage-customerLocation": "\"|42.6641056,23.3233149\"",
+            "__utmz": "149670890.1624529510.9.3.utmcsr=google|utmccn=(organic)|utmcmd=organic|utmctr=(not%20provided)",
+            "JSESSIONID": response.headers.getlist('Set-Cookie')[0].decode("utf-8").split(";")[0].split("=")[1],
+        }
+
+        token = response.css('[name="CSRFToken"]::attr(value)').get()
+
+        body = f'locationQuery=&cartPage=false&entryNumber=0&latitude=42.6641056&longitude=23.3233149&CSRFToken={token}'
+
+        yield Request(
+            url=request_url,
+            method='POST',
+            dont_filter=True,
+            cookies=cookies,
+            headers=headers,
+            callback=self.parse_availability_info,
+            body=body
+        )
+
+    def parse_availability_info(self, response):
+        r = json.loads(response.text)
+        store_availability = [{"store": key['displayName'], "Availability": key['stockPickup']} for key in r['data']]
+        self.product.update({"Availability": store_availability})
+        yield self.product
+
+
+class MrbricolageAvailabilitySpider(scrapy.Spider):
+    name = "Availability"
+
+    product = {}
+
+    start_urls = ['https://mr-bricolage.bg/instrumenti/veloaksesoari/c/006014']
+
+    def parse(self, response):
+        products_links = response.css('a.name::attr(href)')
+        yield from response.follow_all(products_links, self.parse_product)
+        all_pages = response.css('li.pagination-next a')
+        yield from response.follow_all(all_pages, self.parse)
+
+
+    def parse_product(self, response):
+        article_text = self.get_and_strip('div.col-md-12.bricolage-code::text', response)
+        if article_text:
+            article_id = article_text.replace('Код Bricolage: ', '')
+            request_url = f"https://mr-bricolage.bg/store-pickup/{article_id}/pointOfServices"
+            self.product.update({'URL': request_url})
+        headers = {
+            "Connection": "keep-alive",
+            "sec-ch-ua": "\" Not;A Brand\";v=\"99\", \"Google Chrome\";v=\"91\", \"Chromium\";v=\"91\"",
+            "Accept": "*/*",
+            "X-Requested-With": "XMLHttpRequest",
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.114 Safari/537.36",
+            "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
+            "Origin": "https://mr-bricolage.bg",
+            "Sec-Fetch-Dest": "empty",
+            "Referer": response.url,
+            "Accept-Language": "bg-BG,bg;q=0.9,en;q=0.8"
+        }
+
+        cookies = {
+            "bricolage-customerLocation": "\"|42.6641056,23.3233149\"",
+            "__utmz": "149670890.1624529510.9.3.utmcsr=google|utmccn=(organic)|utmcmd=organic|utmctr=(not%20provided)",
+            "JSESSIONID": response.headers.getlist('Set-Cookie')[0].decode("utf-8").split(";")[0].split("=")[1],
+        }
+        token = response.css('[name="CSRFToken"]::attr(value)').get()
+
+        body = f'locationQuery=&cartPage=false&entryNumber=0&latitude=42.6641056&longitude=23.3233149&CSRFToken={token}'
+
+        yield Request(
+            url=request_url,
+            method='POST',
+            dont_filter=True,
+            cookies=cookies,
+            headers=headers,
+            callback=self.parse_availability_info,
+            body=body
+        )
+
+    def get_and_strip(self, path, response):
+        return response.css(path).get().strip()
+
+    def parse_availability_info(self, response):
+        r =json.loads(response.text)
+        store_availability =[{"store": key['displayName'],"Availability": key['stockPickup']} for key in r['data']]
+        self.product.update({"Availability": store_availability})
         yield self.product
