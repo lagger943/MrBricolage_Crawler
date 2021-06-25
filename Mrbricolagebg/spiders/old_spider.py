@@ -1,33 +1,14 @@
 import scrapy
 from scrapy import Request
-from itemloaders import ItemLoader
-from itemloaders.processors import TakeFirst, MapCompose, Join
 import json
 
 
-class Product(scrapy.Item):
-    title = scrapy.Field()
-    price = scrapy.Field()
-    availability = scrapy.Field()
-    article_id = scrapy.Field()
-    ean = scrapy.Field()
-    url = scrapy.Field()
-    images = scrapy.Field()
-    specs_table = scrapy.Field()
-    store_availability = scrapy.Field()
-
-
-class ProductLoader(ItemLoader):
-    default_output_processor = TakeFirst()
-
-    name_in = MapCompose(str.title)
-    name_out = Join()
-
-
-class ItemloaderTest(scrapy.Spider):
-    name = "Mrbricolagebg"
+class MrbricolageSpider(scrapy.Spider):
+    name = "Mrbricolagebg_old"
 
     start_urls = ['https://mr-bricolage.bg/instrumenti/veloaksesoari/c/006014']
+
+    product = {}
 
     def parse(self, response):
         products_links = response.css('a.name::attr(href)')
@@ -35,9 +16,12 @@ class ItemloaderTest(scrapy.Spider):
         all_pages = response.css('li.pagination-next a')
         yield from response.follow_all(all_pages, self.parse)
 
+    def get_and_strip(self, path, response):
+        return response.css(path).get().strip()
+
     def parse_product(self, response):
         request_url = {}
-        article_text = response.css('div.col-md-12.bricolage-code::text').get().strip()
+        article_text = self.get_and_strip('div.col-md-12.bricolage-code::text', response)
         if article_text:
             article_id = article_text.replace('Код Bricolage: ', '')
             request_url = f"https://mr-bricolage.bg/store-pickup/{article_id}/pointOfServices"
@@ -77,24 +61,57 @@ class ItemloaderTest(scrapy.Spider):
         )
 
     def parse_product_info(self, response):
+
+        def spec_table_attributes_extract():
+
+            [self.product.update({'brand': key['value']}) for key in specs_table if "Марка" in key['key']]
+
+            [self.product.update({'model': key['value']}) for key in specs_table if "Модел" in key['key']]
+
+            [self.product.update({'origin': key['value']}) for key in specs_table if "Произход" in key['key']]
+
+            [self.product.update({'warranty': key['value']}) for key in specs_table if "Гаранция" in key['key']]
+
         page = response.meta.get('page_response')
 
-        loader = ItemLoader(Product(), page)
+        self.product.update({'title': self.get_and_strip('h1.js-product-name::text', page)})
 
-        loader.add_value('url', page.url)
-        loader.add_css('title', 'h1.js-product-name::text')
-        loader.add_css('ean', 'div[id="home"] span::text', re='[^\s]+')
-        loader.add_css('article_id', 'div.col-md-12.bricolage-code::text', re='\w+$')
-        loader.add_value('availability', page.css('div.col-md-12.bricolage-availability::text').get().strip())
-        loader.add_css('images', 'div.owl-thumb-item img::attr(src)')
+        raw_price = self.get_and_strip('p.price.js-product-price::text', page)
+        if raw_price:
+            price = raw_price.replace(',', '.')
+            self.product.update({'price': price})
 
-        specs_table = [{'key': row.css('td:nth-child(1)::text').get().strip(),
-                        'value': row.css('td:nth-child(2)::text').get().strip()} for row
+        availability = self.get_and_strip('div.col-md-12.bricolage-availability::text', page)
+        if availability:
+            self.product.update({'availability': availability})
+
+        article_text = self.get_and_strip('div.col-md-12.bricolage-code::text', page)
+        if article_text:
+            article_id = article_text.replace('Код Bricolage: ', '')
+            self.product.update({'article_id': article_id})
+
+        ean = page.css('div[id="home"] span::text').re('[^\s]+')[0]
+        if ean:
+            self.product.update({'ean': ean})
+
+        self.product.update({'url': page.url})
+
+        images = page.css('div.owl-thumb-item img::attr(src)').getall()
+        if images:
+            self.product.update({'images': images})
+
+        specs_table = [{'key': self.get_and_strip('td:nth-child(1)::text', page),
+                        'value': self.get_and_strip('td:nth-child(2)::text', page)} for _
                        in page.css('table.table tr')]
-        loader.add_value('specs_table', specs_table)
+
+        spec_table_attributes_extract()
+
+        self.product.update({"specs_table": specs_table})
 
         r = json.loads(response.text)
+
         store_availability = [{"store": key['displayName'], "Availability": key['stockPickup']} for key in r['data']]
 
-        loader.add_value('store_availability', store_availability)
-        return loader.load_item()
+        self.product.update({"Store Availability": store_availability})
+
+        yield self.product
