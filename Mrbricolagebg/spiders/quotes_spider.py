@@ -1,47 +1,28 @@
 import scrapy
 from scrapy import Request
-from itemloaders import ItemLoader
-from itemloaders.processors import TakeFirst, MapCompose, Join
 import json
 
+from itemloaders import ItemLoader
+from Mrbricolagebg.items import MrbricolagebgItem
 
-class Product(scrapy.Item):
-    title = scrapy.Field()
-    price = scrapy.Field()
-    availability = scrapy.Field()
-    article_id = scrapy.Field()
-    ean = scrapy.Field()
-    url = scrapy.Field()
-    images = scrapy.Field()
-    specs_table = scrapy.Field()
-    store_availability = scrapy.Field()
+import re
 
-
-class ProductLoader(ItemLoader):
-    default_output_processor = TakeFirst()
-
-    name_in = MapCompose(str.title)
-    name_out = Join()
-
-
-class Mrbricolagebg_spider(scrapy.Spider):
+class MrbricolagebgSpider(scrapy.Spider):
     name = "Mrbricolagebg"
 
     start_urls = ['https://mr-bricolage.bg/instrumenti/veloaksesoari/c/006014']
 
     def parse(self, response):
-        products_links = response.css('a.name::attr(href)')
-        yield from response.follow_all(products_links, self.parse_request)
-        all_pages = response.css('li.pagination-next a')
-        yield from response.follow_all(all_pages, self.parse)
+        for href in response.css('a.name::attr(href)'):
+            yield response.follow(href, self.parse_request)
+
+        next_page = response.css('li.pagination-next a::attr(href)').get()
+        if next_page is not None:
+            yield response.follow(next_page, callback= self.parse)
 
     def parse_request(self, response):
-        request_url = {}
-        article_text = response.css('div.col-md-12.bricolage-code::text').get().strip()
-        if article_text:
-            article_id = article_text.replace('Код Bricolage: ', '')
-            request_url = f"https://mr-bricolage.bg/store-pickup/{article_id}/pointOfServices"
-
+        article_id = re.findall("\w+$", response.url)[0]
+        request_url = f"https://mr-bricolage.bg/store-pickup/{article_id}/pointOfServices"
         headers = {
             "Connection": "keep-alive",
             "sec-ch-ua": "\" Not;A Brand\";v=\"99\", \"Google Chrome\";v=\"91\", \"Chromium\";v=\"91\"",
@@ -77,24 +58,24 @@ class Mrbricolagebg_spider(scrapy.Spider):
         )
 
     def parse_product_info(self, response):
-        page = response.meta.get('page_response')
+        product_page = response.meta.get('page_response')
 
-        loader = ItemLoader(Product(), page)
+        loader = ItemLoader(MrbricolagebgItem(), product_page)
 
-        loader.add_value('url', page.url)
+        loader.add_value('url', product_page.url)
         loader.add_css('title', 'h1.js-product-name::text')
         loader.add_css('ean', 'div[id="home"] span::text', re='[^\s]+')
-        loader.add_css('article_id', 'div.col-md-12.bricolage-code::text', re='\w+$')
-        loader.add_value('availability', page.css('div.col-md-12.bricolage-availability::text').get().strip())
+        loader.add_value('article_id', re.findall("\w+$", product_page.url)[0], re='\w+$')
+        loader.add_value('availability', product_page.css('div.col-md-12.bricolage-availability::text').get().strip())
         loader.add_css('images', 'div.owl-thumb-item img::attr(src)')
 
         specs_table = [{'key': row.css('td:nth-child(1)::text').get().strip(),
                         'value': row.css('td:nth-child(2)::text').get().strip()} for row
-                       in page.css('table.table tr')]
+                       in product_page.css('table.table tr')]
         loader.add_value('specs_table', specs_table)
 
-        r = json.loads(response.text)
-        store_availability = [{"store": key['displayName'], "Availability": key['stockPickup']} for key in r['data']]
+        stores_data = json.loads(response.text)
+        store_availability = [{"store": key['displayName'], "Availability": key['stockPickup']} for key in stores_data['data']]
 
         loader.add_value('store_availability', store_availability)
         return loader.load_item()
