@@ -24,18 +24,18 @@ class ProductLoader(ItemLoader):
     name_out = Join()
 
 
-class ItemloaderTest(scrapy.Spider):
+class Mrbricolagebg_spider(scrapy.Spider):
     name = "Mrbricolagebg"
 
     start_urls = ['https://mr-bricolage.bg/instrumenti/veloaksesoari/c/006014']
 
     def parse(self, response):
         products_links = response.css('a.name::attr(href)')
-        yield from response.follow_all(products_links, self.parse_product)
+        yield from response.follow_all(products_links, self.parse_request)
         all_pages = response.css('li.pagination-next a')
         yield from response.follow_all(all_pages, self.parse)
 
-    def parse_product(self, response):
+    def parse_request(self, response):
         request_url = {}
         article_text = response.css('div.col-md-12.bricolage-code::text').get().strip()
         if article_text:
